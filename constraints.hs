@@ -4,7 +4,7 @@ Types can be thought of as tight parity 1 constraints on type variables:
 
    Foo ≅ (Foo a) -> a
 
-Higher order types could be very powerfull.
+Higher order types constraints could be very powerfull.
 
 Consider a function pointwise, as in pointwise addition of addition.
 
