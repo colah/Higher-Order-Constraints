@@ -1,6 +1,6 @@
 Higher order types constraints could be very powerfull.
 
-Consider a function pointwise, as in pointwise addition of addition.
+Consider a function `pointwise`, as in pointwise addition of addition.
 
 We might think of it as:
 
@@ -47,7 +47,7 @@ pointwise :: (cons a b c => a -> b -> c) -> ...
 
 Then imagine that we could have "higher-order" constraints, which take constraints as an argument. In particular, let us consider a hypothetical constraint which I'll call `VectorPromote3`. It would take a constraint on 3 types and produce a new constraint on 3 types that would accept any vectors as long as the corresponding components were appropriate for the given constraint.
 
-For example, suppose we have the following `Additive` class, similar to what is seen in the (Functional Dependency page)[http://www.haskell.org/haskellwiki/Functional_dependencies] on Haskell Wiki.
+For example, suppose we have the following `Additive` class, similar to what is seen in the [Functional Dependency page](http://www.haskell.org/haskellwiki/Functional_dependencies) on Haskell Wiki.
 
 ```haskell
 class Additive a b c | a b -> c where
@@ -64,7 +64,7 @@ Then once could have things like `VectorPromote3 Additive (Real, Int) (Real, Int
 
 We could now give a proper type signature for our pointwise function:
 
-http://www.haskell.org/haskellwiki/Functional_dependencies
+```haskell
 pointwise :: (VectorPromote3 cons veca vecb vecc) => (cons => a -> b -> c) -> veca -> vecb -> vecc
 ```
 
