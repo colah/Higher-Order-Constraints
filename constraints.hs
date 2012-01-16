@@ -77,14 +77,14 @@ We're going to find out ;-)
 
 -- Let's start by representing the usual constraint system
 
-data TypeVariable = TypeVariable Int deriving (Eq, Show)
+type TypeVariable = Int
 
-data Constraint = Constraint1 String TypeVariable
-                | Constraint2 String TypeVariable TypeVariable
-                | Constraint3 String TypeVariable TypeVariable TypeVariable
-                | Constraint4 String TypeVariable TypeVariable TypeVariable TypeVariable
+data Constraint = Constraint String [TypeVariable] deriving (Eq)
 
 data TypeExpression = TypeExpression TypeVariable [Constraint]
+
+instance Show Constraint where
+	show (Constraint name vars) = name ++ " " ++ (foldl1 (\a b -> a ++ " " ++ b) (map show vars))
 
 expandVar ::
 	TypeVariable
@@ -93,21 +93,35 @@ expandVar ::
 	    [Constraint])
 expandVar var constraints =
 	let
-		isSpecial (Constraint1 ('T':':':xs) relvar) = var == relvar
-		isSpecial (Constraint2 "List" _ relvar)     = var == relvar
-		isSpecial (Constraint3 "Func" _ _ relvar)   = var == relvar
+		isSpecial (Constraint ('T':':':xs) [relvar]) = var == relvar
+		isSpecial (Constraint "List"  (_:relvar:[]))    = var == relvar
+		isSpecial (Constraint "Func"  (_:_:relvar:[]))  = var == relvar
+		isSpecial (Constraint "Tuple" vars)  = last vars == var
 		isSpecial _ = False
 		specials = filter isSpecial constraints
 		(expansion, used) = if null specials then (show var, []) else case specials !! 0 of 
-			Constraint1 ('T':':':typename) _ -> 
+			Constraint ('T':':':typename) _ -> 
 				(typename, [specials !! 0])
-			Constraint2 "List" a  _ -> 
+			Constraint "List" (a:_) -> 
 				("[" ++ fst (expandVar a constraints) ++ "]",
 				 [specials !! 0] ++ snd (expandVar a constraints) )
-			Constraint3 "Func" a b _   -> 
+			Constraint "Func" (a:b:_)   -> 
 				(fst (expandVar a constraints) ++ "->" ++ fst (expandVar b constraints),
 				 [specials !! 0] ++ snd (expandVar a constraints) ++ snd (expandVar b constraints) )
+			Constraint "Tuple" vars -> 
+				("(" ++ foldl1 (\a b -> a ++ ", " ++ b) (map (\v -> fst $ expandVar v constraints) (init vars)) ++ ")",
+				 [specials !! 0] ++ (concat $ map ( \v -> snd $ expandVar v constraints) (init vars) ) )
 	in (expansion, used)
+
+instance Show TypeExpression where
+	show (TypeExpression var constraints) = 
+		let
+			(body, used) = expandVar var constraints
+			unused = filter (\x -> not $ elem x used) constraints
+		in
+			if null unused
+			then body
+			else "(" ++ foldl1 (\a b -> a ++ ", " ++ b) (map show unused) ++ ") => " ++ body
 
 --instance Show Constraint where
 --	show Constraint
