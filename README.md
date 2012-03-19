@@ -1,77 +1,87 @@
 Higher order types constraints could be very powerfull.
 
-Consider a function `pointwise`, as in pointwise addition of addition.
-
-We might think of it as:
+Consider a function `tmap` which maps a function over a tuple. That is,
 
 ```haskell
-class PointwiseApplicable func vecA vecB vecResult where
-	pointwise :: func -> vecA -> vecB -> vecResult
+tmap f (a,b) = (f a, f b)
+tmap f (a,b,c) = (f a, f b, f c)
+...
+```
 
-instance PointwiseApplicable (a -> b -> c) a b c where
-	pointwise f = f
+One might imagine having a class, `TMap`, that would help us with this.
 
-instance PointwiseApplicable (a -> b -> c) (a,a) (b,b) (c,c) where
-	pointwise f (a1, a2) (b1, b2) = (f a1 b1, f a2 b2)
+```haskell
+class TMap func vecA vecB | func vecA -> vecB where
+	tmap :: func -> vecA -> vecB
+
+instance TMap (a -> b) a b where
+	tmap f a = f a
+
+instance TMap (a -> b) (a,a) (b,b) where
+	tmap f (a1, a2) = (f a1, f a2)
 
 ...
 ```
 
-There's several problems with this. The most immediate is that it is highly
- tedious, and no finite amount of work can cover vectors of an arbitrary rate,
-normally, but one could use templating to solve this.
-
-Alternativly, one could imagine a compiler being able to support something like 
+One might even imagine being able to do something like in a really cool compiler,
 
 ```haskell
-instance PointwiseApplicable (a -> b -> c) (a^n) (b^n) (c^n) where
+instance TMap (a -> b) (a^n) (b^n) where
    ....
 ```
 
-Or even us being able to directly define
+
+Now let's imagine using it.
 
 ```haskell
-pointwise :: (a -> b -> c) -> a^n -> b^n -> c^n
+Prelude> let f name = "Holy " ++ name ++ " Batman!"
+Prelude> tmap f "jelly beans"
+"Holy jelly beans, Batman!"
+Prelude> tmap f ("kitties", "cats")
+("Holy kitties, Batman!","Holy cats, Batman!")
+Prelude>  tmap f ("cat","dog","mouse")
+("Holy cat, Batman!","Holy dog, Batman!","Holy mouse, Batman!")
+Prelude> -- So far, so good
+Prelude> -- Now, let's do something more interestng
+Prelude> tmap show ("cat","dog")
+
+<interactive>:1:1:
+    No instance for (TMap (a0 -> String) ([Char], [Char]) vecB0)
+      arising from a use of `tmap'
+    Possible fix:
+      add an instance declaration for
+      (TMap (a0 -> String) ([Char], [Char]) vecB0)
+    In the expression: tmap show ("cat", "dog")
+    In an equation for `it': it = tmap show ("cat", "dog")
+
+Prelude> -- OK, it doesn't like the polymorphism of show.
+Prelude> -- That sucks, but we can make do.
+Prelude> tmap (show :: String -> String) ("cat","dog")
+("\"cat\"","\"dog\"")
+Prelude> -- What if we want to do something like this though?
+Prelude> tmap show (1,"foo")
+<compiler shouts a lot>
 ```
 
-But this still isn't right. Consider `(Pointwise (+))`: it really ought to be able to add
-two `(Int, Real)` vectors, but under this scheme wouldn't be able to.
+It simply can't be done. And that *really* sucks.
 
-Instead, imagine if one could 'catch' constrainst of arguments and not deal with them as specific types but as constrained type variables, for example
+In order for something like this to be possible, we'd need to cick our type system up a notch. Here's what I'm thinking:
 
 ```haskell
-pointwise :: (cons a b c => a -> b -> c) -> ...
+class (Constraint cons) => TMap cons veca vecb where
+	tmap :: (cons a b => a -> b) -> veca -> vecb
+
+instance (cons a b) => TMap cons a b where
+	tmap f a = f a
+
+instance (cons a1 b1, cons a2 b2) => TMap cons (a1, a2) (b1, b2) where
+	tmap f (a1, a2) = (f a1, f a2)
 ```
 
-(nb. Any constraints on subsets of a b c can be absorbed into the larger constraint.)
+The basic idea is that constraints, in addition to types, can be variables. `(Constraint cons) =>` tells the compiler that `cons` is going to be a constraint variable instead of a type variable. Then `TMap` acts on the three variables, a constraint variable `cons`, a type variable `veca` and a second type variable `vecb`, providing a function `tmap` which takes a first argument, of a function with its inpute and output described by our constraint -- `(cons a b => a -> b)` -- and yielding a function from `veca` to `vecb`.
 
-Then imagine that we could have "higher-order" constraints, which take constraints as an argument. In particular, let us consider a hypothetical constraint which I'll call `VectorPromote3`. It would take a constraint on 3 types and produce a new constraint on 3 types that would accept any vectors as long as the corresponding components were appropriate for the given constraint.
+After that, we begin declaring instances. The key part is stating how the constraint needs to relate to the type variables, in order for the instance to be valid (for example: `(cons a1 b1, cons a2 b2) => `).
 
-For example, suppose we have the following `Additive` class, similar to what is seen in the [Functional Dependency page](http://www.haskell.org/haskellwiki/Functional_dependencies) on Haskell Wiki.
+These are trivial examples. Are there more interesting ones? Certainly.
 
-```haskell
-class Additive a b c | a b -> c where
-  (+) :: a -> b -> c
 
-instance Additive Real Real Real where
-  ...
-
-isntance Additive Int Int Int where
-  ...
-```
-
-Then once could have things like `VectorPromote3 Additive (Real, Int) (Real, Int) (Real, Int)` -- which makes sense, since you should really be able to add two `(Real, Int)` s. 
-
-We could now give a proper type signature for our pointwise function:
-
-```haskell
-pointwise :: (VectorPromote3 cons veca vecb vecc) => (cons => a -> b -> c) -> veca -> vecb -> vecc
-```
-
-Yay!
-
-This is just one example of how awesome higher order type constraints would be.
-
-... So, can such a thing be implemented and type checked?
-
-We're going to find out ;-)
